@@ -1,4 +1,5 @@
 import tkinter
+import math
 
 def sign(x):
     if x > 0:
@@ -11,8 +12,8 @@ def sign(x):
 
 class Application(tkinter.Frame):
     pixel_size = 600
-    grid_step = 10
-    grid_size = int(pixel_size/grid_step) + 2
+    grid_step = 50
+    grid_size = int(pixel_size/grid_step)+1
     def __init__(self, master):
         tkinter.Frame.__init__(self, master)
         self.prev_x = -1 
@@ -36,38 +37,44 @@ class Application(tkinter.Frame):
     def change_flag(self, event):
         self.flag = (self.flag+1)%2
 
+
+    def color_cells(self, x_p, y_p, x, y):
+        if x - x_p != 0:
+            k = (y - y_p)/(x - x_p)
+            if abs(k) <= 1:
+                x_start = min(x_p, x)
+                x_end = max(x_p, x)
+                it_x = math.sqrt(1/(math.sqrt(1+k**2))) * self.grid_step
+                while x_start < x_end:
+                    self.Matrix[int(((x_start - x)*k + y)/self.grid_step)][int(x_start/self.grid_step)] = 1
+                    x_start += it_x
+                return
+        
+        if y - y_p != 0:
+            k = (x - x_p)/(y - y_p)
+            y_start = min(y_p, y)
+            y_end = max(y_p, y)
+            it_y = math.sqrt(1/(math.sqrt(1+k**2))) * self.grid_step
+            while y_start < y_end:
+                self.Matrix[int(y_start/self.grid_step)][int(((y_start - y)*k + x)/self.grid_step)] = 1
+                y_start += it_y
+        return
+                
+        
+
     def draw(self, event):
         if self.prev_x != -1 and self.flag == 0:
             #self.canvas.create_oval(event.x-1, event.y-1, event.x+1, event.y+1)
             self.dots.append([event.x, event.y])
             self.canvas.create_line(self.prev_x, self.prev_y, event.x, event.y, fill="#000", width=2)
-            x = self.prev_x
-            y = self.prev_y
-            it_x = Application.grid_step*sign(event.x-self.prev_x)
-            it_y = Application.grid_step*sign(event.y-self.prev_y)
-            while it_x*x < it_x*(event.x + (event.x-self.prev_x)) and it_y*y < it_y*(event.y + (event.y-self.prev_y)):
-                self.Matrix[int(y/Application.grid_step)][int(x/Application.grid_step)] = 1
-                self.Matrix[int((y+it_y)/Application.grid_step)][int((x+it_x)/Application.grid_step)] = 1
-                break
-                x += it_x
-                y += it_y
+            self.color_cells(self.prev_x, self.prev_y, event.x, event.y)
             
         self.prev_x = event.x
         self.prev_y = event.y
         if self.flag != 0:
             self.flag = 0
 
-        def color_cells(self, x_p, y_p, x, y) {
-            k = (y - y_p)/(x - x_5)
-            if abs(k) <= 1:
-                x_start = min(x_p, x)
-                x_end = max(x_p, x)
-                it_x = sqrt(1/(sqrt(1+k^2))) * self.grid_step
-                while x_start < x_end:
-                    self.Matrix[((x_start - x)*k + y)/self.grid_step][x_start]
-                    x_strat += it_x
-                
-        }
+        
 
 
 if __name__ == "__main__":
@@ -79,11 +86,10 @@ if __name__ == "__main__":
     button1.configure(width = 10, activebackground = "#33B5E5")
     button1_window = app.canvas.create_window(300, 20, window=button1)
     root.mainloop()
-    print(app.dots)
+    #print(app.dots)
     for row in app.Matrix:
         for elem in row:
             print(elem, end=' ')
         print('\n')
-    print(int(3/3))
  
         
