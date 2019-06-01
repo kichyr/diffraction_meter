@@ -12,8 +12,11 @@ def sign(x):
 
 class Application(tkinter.Frame):
     pixel_size = 600
-    grid_step = 50
-    grid_size = int(pixel_size/grid_step)+1
+    grid_step = 10
+    grid_size = int(pixel_size/grid_step)+2
+
+    color_grid_size = 60
+
     def __init__(self, master):
         tkinter.Frame.__init__(self, master)
         self.prev_x = -1 
@@ -23,7 +26,8 @@ class Application(tkinter.Frame):
         self.create_widgets()
         self.dots = []
         self.draw_finished = 0
-        self.Matrix = [[0 for x in range(Application.grid_size)] for y in range(Application.grid_size)] 
+        self.Matrix = [[0 for x in range(Application.grid_size)] for y in range(Application.grid_size)]
+        self.color_matrix = [[0 for x in range(Application.color_grid_size)] for y in range(Application.color_grid_size)]
 
     def create_widgets(self):
         self.canvas = tkinter.Canvas(self, width=Application.pixel_size, height=Application.pixel_size)
@@ -37,6 +41,21 @@ class Application(tkinter.Frame):
     def change_flag(self, event):
         self.flag = (self.flag+1)%2
 
+    def stop_drawing(self):
+        self.canvas.bind("<B1-Motion>", lambda e: None)
+        self.display_diff_picture()
+
+    
+    def display_diff_picture(self):
+        for i in range(Application.color_grid_size):
+            for j in range(Application.color_grid_size):
+                self.color_matrix[i][j] = i
+        step = Application.pixel_size/Application.color_grid_size
+        for i in range(Application.color_grid_size):
+            for j in range(Application.color_grid_size):
+                colorval = "#%02x%02x%02x" % (self.color_matrix[i][j], self.color_matrix[i][j], self.color_matrix[i][j])
+                self.canvas.create_rectangle(i*step, j*step, i*step+step, j*step+step, fill=colorval,  outline="")
+        
 
     def color_cells(self, x_p, y_p, x, y):
         if x - x_p != 0:
@@ -82,7 +101,7 @@ if __name__ == "__main__":
     root.title("diffraction meter")
 
     app = Application(root)
-    button1 = tkinter.Button(root, text = "finish", command=root.destroy)
+    button1 = tkinter.Button(root, text = "finish", command=app.stop_drawing)
     button1.configure(width = 10, activebackground = "#33B5E5")
     button1_window = app.canvas.create_window(300, 20, window=button1)
     root.mainloop()
