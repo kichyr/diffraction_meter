@@ -3,21 +3,28 @@ import threading
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor
+import tkinter.ttk as ttk
+from threading import Thread, Lock
 
 class Application(tkinter.Frame):
     pixel_size = 600 # Размер сетки(в координатах)
-    grid_step = 8 # Размер квадрата сетки
+    grid_step = 10 # Размер квадрата сетки
     grid_size = int(pixel_size/grid_step) # Размер сетки(в квадратах)
 
-    color_grid_step = 8 # Размер квадрата матрицы интенсивностей
+    color_grid_step = 5 # Размер квадрата матрицы интенсивностей
     color_grid_size = int(pixel_size/color_grid_step) # Размер матрицы интенсивностей
 
     def __init__(self, master):
         tkinter.Frame.__init__(self, master)
+        self.interrupt_calc = False
+        self.num_threads = 6
+        
         self.end_threads_counter = 0
+        self.mutex = Lock()
+        self.mpb = ttk.Progressbar(self,orient ="horizontal",length = 600, mode ="determinate")
         self.prev_x = -1
         self.prev_y = -1
-        self.grid()
+        self.pack()
         self.flag = 0
         self.create_widgets()
         self.dots = [] # Точки контура
@@ -34,7 +41,7 @@ class Application(tkinter.Frame):
     def create_widgets(self):
         self.canvas = tkinter.Canvas(self, width=Application.pixel_size,
                                      height=Application.pixel_size)
-        self.canvas.grid()
+        self.canvas.pack()
         self.canvas.bind('<B1-Motion>', self.draw)
         self.canvas.bind('<ButtonRelease-1>', self.change_flag)
 
@@ -66,15 +73,18 @@ class Application(tkinter.Frame):
                     e6 += default_e * math.cos(5*math.pi/3 + (x_c*s_x + y_c*s_y)
                                                  *2*math.pi/self.lambda_wave)
         self.color_matrix[j_pos][i_pos] = max(abs(e1), abs(e2), abs(e3), abs(e4), abs(e5), abs(e6))
+        self.mutex.acquire()
         self.end_threads_counter += 1
-        #print(self.end_threads_counter)
-
+        self.mutex.release()
+        p#rint(self.end_threads_counter)
 
 
     # Вычисление всей матрицы интенсивностей    
     def calc_intensity(self, start_i, end_i):
         for i in range(start_i, min(Application.color_grid_size, end_i)):
             for j in range(Application.color_grid_size):
+                if self.interrupt_calc:
+                    return
                 s_x = (Application.color_grid_step*j - Application.pixel_size/2)*self.pixel_len
                 s_y = (Application.color_grid_step*i - Application.pixel_size/2)*self.pixel_len
                 s_z = self.l_0
@@ -102,37 +112,48 @@ class Application(tkinter.Frame):
         
     
     def calculate(self):
-        pool = ThreadPoolExecutor(40)
-        num_threads = 40
-        step = int(Application.color_grid_size/(num_threads))+1
-        print(step)
-        for i in range(num_threads):
+        pool = ThreadPoolExecutor(self.num_threads)
+        step = int(Application.color_grid_size/(self.num_threads))+1
+        #print("ok")
+        for i in range(self.num_threads):
             pool.submit(self.calc_intensity, i*step, (i+1)*step)
+            if self.interrupt_calc:
+                return
 
         #Ждем завершения вычислений
-        while self.end_threads_counter != Application.color_grid_size ** 2:
-            time.sleep(0.1)
-            print(self.end_threads_counter)
-
-        self.display_diff_picture()
+        while self.end_threads_counter != Application.color_grid_size ** 2 and not self.interrupt_calc:
+            time.sleep(0.2)
+            self.mpb["value"] = self.end_threads_counter/Application.color_grid_size ** 2 * 100
+        if not self.interrupt_calc:
+            self.display_diff_picture()
         
         
 
     def change_flag(self, event):
         self.flag = (self.flag + 1)%2
 
+    def null_matrix(self):
+        for i in range(Application.grid_size):
+            for j in range(Application.grid_size):
+                self.matrix[i][j] = 0
+
+
 
     def stop_drawing(self):
         self.canvas.bind("<B1-Motion>", lambda e: None)
         self.color_int()
         #запускаем поток вычислений
-        t = threading.Thread(target=self.calculate(), args=())
-        t.start()
-
+        calc_thread = threading.Thread(target=lambda: self.calculate())
+        calc_thread.start()
+        #self.mpb.place(relx=10.0, rely=20.0, anchor='sw')
+        self.mpb.pack()
+        self.mpb["maximum"] = 100
         
 
+        
+        
 
-    # Рисовалка матрицы интенсивностей
+    # Отрисовываем матрицу интенсивностей
     def display_diff_picture(self):
         max_value = -999999
         min_value = 999999
@@ -191,6 +212,19 @@ class Application(tkinter.Frame):
         if self.flag != 0:
             self.flag = 0
 
+    def again(self):
+        self.interrupt_calc = True
+        self.canvas.delete("all")
+        self.null_matrix()
+        self.canvas.bind('<B1-Motion>', self.draw)
+        self.create_buttons()  
+        self.end_threads_counter = 0
+        self.interrupt_calc = False
+        
+    
+    def destroy(self):
+        self.interrupt_calc = True
+        #self.calc_thread.shutdown()
 
     # Определение внутренности контура
     def color_int(self):
@@ -253,13 +287,21 @@ class Application(tkinter.Frame):
                         state = 0
                 j += 1
 
+    def create_buttons(self):
+        BUTTON_FINISH = tkinter.Button(ROOT, text="finish", command=self.stop_drawing)
+        BUTTON_FINISH.configure(width=10, activebackground="#33B5E5")
+        BUTTON_FINISH_WINDOW = self.canvas.create_window(300, 20, window=BUTTON_FINISH)
+
+        BUTTON_AGAIN = tkinter.Button(ROOT, text="clear", command=APP.again)
+        BUTTON_AGAIN.configure(width=10, activebackground="#33B5E5")
+        BUTTON_AGAIN_WINDOW = self.canvas.create_window(520, 20, window=BUTTON_AGAIN)
 
 if __name__ == "__main__":
     ROOT = tkinter.Tk()
     ROOT.title("diffraction meter")
 
     APP = Application(ROOT)
-    BUTTON_1 = tkinter.Button(ROOT, text="finish", command=APP.stop_drawing)
-    BUTTON_1.configure(width=10, activebackground="#33B5E5")
-    BUTTON_1_WINDOW = APP.canvas.create_window(300, 20, window=BUTTON_1)
+    APP.create_buttons()
+    
     ROOT.mainloop()
+    APP.destroy()
