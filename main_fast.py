@@ -9,7 +9,7 @@ class Application(tkinter.Frame):
     grid_step = 8 # Размер квадрата сетки
     grid_size = int(pixel_size/grid_step) # Размер сетки(в квадратах)
 
-    color_grid_step = 5 # Размер квадрата матрицы интенсивностей
+    color_grid_step = 8 # Размер квадрата матрицы интенсивностей
     color_grid_size = int(pixel_size/color_grid_step) # Размер матрицы интенсивностей
 
     def __init__(self, master):
@@ -42,29 +42,38 @@ class Application(tkinter.Frame):
     # Вычисление суммы волн от всех квадратов сетки по направлению (s_x, s_y, s_z)
     # Приблизительное нахождение амплитуды волны посредством сдвига фазы и взятия максимального значения E
     def summing_tension(self, s_x, s_y, default_e, i_pos, j_pos):
-        initial_phases = []
-        e_phased = []
-        for i in range(self.n_initial_phases):
-            e_phased.append(0)
-            initial_phases.append(i*2*math.pi/self.n_initial_phases)
+        e1 = 0
+        e2 = 0
+        e3 = 0
+        e4 = 0
+        e5 = 0
+        e6 = 0
         for i in range(Application.grid_size):
             for j in range(Application.grid_size):
                 if self.matrix[i][j] != 0:
                     x_c = (j*Application.grid_step - Application.pixel_size/2)*self.pixel_len
                     y_c = (i*Application.grid_step - Application.pixel_size/2)*self.pixel_len
-                    for k in range(self.n_initial_phases):
-                        e_phased[k] += default_e * math.cos(initial_phases[k] + (x_c*s_x + y_c*s_y)
-                                                            *2*math.pi/self.lambda_wave)
-        for i in range(self.n_initial_phases):
-            e_phased[i] = abs(e_phased[i])
-        self.color_matrix[j_pos][i_pos] = max(e_phased)
+                    e1 += default_e * math.cos((x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+                    e2 += default_e * math.cos(math.pi/3 + (x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+                    e3 += default_e * math.cos(2*math.pi/3 + (x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+                    e4 += default_e * math.cos(3*math.pi/3 + (x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+                    e5 += default_e * math.cos(4*math.pi/3 + (x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+                    e6 += default_e * math.cos(5*math.pi/3 + (x_c*s_x + y_c*s_y)
+                                                 *2*math.pi/self.lambda_wave)
+        self.color_matrix[j_pos][i_pos] = max(abs(e1), abs(e2), abs(e3), abs(e4), abs(e5), abs(e6))
         self.end_threads_counter += 1
+        #print(self.end_threads_counter)
+
 
 
     # Вычисление всей матрицы интенсивностей    
-    def calc_intensity(self):
-        pool = ThreadPoolExecutor(40)
-        for i in range(Application.color_grid_size):
+    def calc_intensity(self, start_i, end_i):
+        for i in range(start_i, min(Application.color_grid_size, end_i)):
             for j in range(Application.color_grid_size):
                 s_x = (Application.color_grid_step*j - Application.pixel_size/2)*self.pixel_len
                 s_y = (Application.color_grid_step*i - Application.pixel_size/2)*self.pixel_len
@@ -89,14 +98,24 @@ class Application(tkinter.Frame):
                 # Волна от одного квадрата в направлении (s_x, s_y, s_z)
                 default_e = ((self.pixel_len*Application.grid_step)**2)*a_s*b_s
 
-                pool.submit(self.summing_tension, s_x, s_y, default_e, Application.color_grid_size - j - 1, i)
+                self.summing_tension(s_x, s_y, default_e, Application.color_grid_size - j - 1, i)
+        
+    
+    def calculate(self):
+        pool = ThreadPoolExecutor(40)
+        num_threads = 40
+        step = int(Application.color_grid_size/(num_threads))+1
+        print(step)
+        for i in range(num_threads):
+            pool.submit(self.calc_intensity, i*step, (i+1)*step)
+
         #Ждем завершения вычислений
         while self.end_threads_counter != Application.color_grid_size ** 2:
             time.sleep(0.1)
+            print(self.end_threads_counter)
 
         self.display_diff_picture()
         
-            
         
 
     def change_flag(self, event):
@@ -107,7 +126,7 @@ class Application(tkinter.Frame):
         self.canvas.bind("<B1-Motion>", lambda e: None)
         self.color_int()
         #запускаем поток вычислений
-        t = threading.Thread(target=self.calc_intensity(), args=())
+        t = threading.Thread(target=self.calculate(), args=())
         t.start()
 
         
